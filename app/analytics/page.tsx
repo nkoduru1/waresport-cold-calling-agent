@@ -119,10 +119,7 @@ export default function AnalyticsPage() {
         <div>
           <div className="flex items-center gap-2">
             <h1 className="text-2xl font-bold text-gray-900">Analytics</h1>
-            {isLive
-              ? <span className="flex items-center gap-1 text-xs bg-green-100 text-green-700 px-2 py-0.5 rounded-full font-medium"><span className="w-1.5 h-1.5 bg-green-500 rounded-full animate-pulse" />Live</span>
-              : <span className="text-xs bg-gray-100 text-gray-500 px-2 py-0.5 rounded-full font-medium">Demo data</span>
-            }
+            {isLive && <span className="flex items-center gap-1 text-xs bg-green-100 text-green-700 px-2 py-0.5 rounded-full font-medium"><span className="w-1.5 h-1.5 bg-green-500 rounded-full animate-pulse" />Live</span>}
           </div>
           <p className="text-gray-500 text-sm mt-1">Performance across all campaigns</p>
         </div>

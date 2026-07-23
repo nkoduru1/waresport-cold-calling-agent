@@ -28,7 +28,19 @@ const outcomeLabel: Record<string, string> = {
   "completed": "Completed",
 };
 
-type Call = typeof mockCalls[0] & { recording_url?: string | null };
+type Call = {
+  id: string;
+  club_name: string;
+  phone: string;
+  outcome: string;
+  duration: number;
+  campaign_name: string;
+  campaign_id: string;
+  started_at: string;
+  transcript: string | null;
+  summary: string | null;
+  recording_url: string | null;
+};
 
 export default function CallsPage() {
   const [calls, setCalls] = useState<Call[]>([]);
@@ -76,10 +88,7 @@ export default function CallsPage() {
         <div>
           <div className="flex items-center gap-2">
             <h1 className="text-2xl font-bold text-gray-900">Calls</h1>
-            {isLive
-              ? <span className="flex items-center gap-1 text-xs bg-green-100 text-green-700 px-2 py-0.5 rounded-full font-medium"><span className="w-1.5 h-1.5 bg-green-500 rounded-full animate-pulse" />Live</span>
-              : <span className="text-xs bg-gray-100 text-gray-500 px-2 py-0.5 rounded-full font-medium">Demo data</span>
-            }
+            {isLive && <span className="flex items-center gap-1 text-xs bg-green-100 text-green-700 px-2 py-0.5 rounded-full font-medium"><span className="w-1.5 h-1.5 bg-green-500 rounded-full animate-pulse" />Live</span>}
           </div>
           <p className="text-gray-500 text-sm mt-1">{calls.length} calls recorded</p>
         </div>
