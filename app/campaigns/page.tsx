@@ -1,7 +1,6 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { mockCampaigns } from "@/lib/mock-data";
 import Link from "next/link";
 import { Plus, Play, Pause, ChevronRight, RefreshCw } from "lucide-react";
 
@@ -29,28 +28,34 @@ const statusColors: Record<string, string> = {
 export default function CampaignsPage() {
   const [campaigns, setCampaigns] = useState<Campaign[]>([]);
   const [loading, setLoading] = useState(true);
-  const [isLive, setIsLive] = useState(false);
 
   const load = async () => {
     setLoading(true);
     try {
-      const res = await fetch("/api/campaigns");
-      const real: Campaign[] = await res.json();
-      if (real.length > 0) {
-        // Merge real with mock (real ones on top)
-        const realIds = new Set(real.map((c) => c.id));
-        const combined = [
-          ...real.map((c) => ({ ...c, contact_count: c.contact_count ?? (c as any).contacts?.length ?? 0, calls_made: c.calls_made ?? 0, demos_booked: c.demos_booked ?? 0 })),
-          ...mockCampaigns.filter((m) => !realIds.has(m.id)),
-        ];
-        setCampaigns(combined);
-        setIsLive(true);
-      } else {
-        setCampaigns(mockCampaigns);
-        setIsLive(false);
-      }
+      const [campsRes, callsRes] = await Promise.all([
+        fetch("/api/campaigns"),
+        fetch("/api/calls"),
+      ]);
+      const real: Campaign[] = await campsRes.json();
+      const allCalls: Array<{ campaign_id: string; outcome: string }> = await callsRes.json();
+
+      const callsByCampaign: Record<string, { made: number; demos: number }> = {};
+      allCalls.forEach((c) => {
+        if (!callsByCampaign[c.campaign_id]) callsByCampaign[c.campaign_id] = { made: 0, demos: 0 };
+        callsByCampaign[c.campaign_id].made++;
+        if (c.outcome === "demo-booked") callsByCampaign[c.campaign_id].demos++;
+      });
+
+      setCampaigns(
+        real.map((c) => ({
+          ...c,
+          contact_count: (c as any).contacts?.length ?? c.contact_count ?? 0,
+          calls_made: callsByCampaign[c.id]?.made ?? 0,
+          demos_booked: callsByCampaign[c.id]?.demos ?? 0,
+        }))
+      );
     } catch {
-      setCampaigns(mockCampaigns);
+      setCampaigns([]);
     } finally {
       setLoading(false);
     }
@@ -79,10 +84,7 @@ export default function CampaignsPage() {
     <div className="p-6 space-y-5">
       <div className="flex items-center justify-between">
         <div>
-          <div className="flex items-center gap-2">
-            <h1 className="text-2xl font-bold text-gray-900">Campaigns</h1>
-            {isLive && <span className="flex items-center gap-1 text-xs bg-green-100 text-green-700 px-2 py-0.5 rounded-full font-medium"><span className="w-1.5 h-1.5 bg-green-500 rounded-full" />Live</span>}
-          </div>
+          <h1 className="text-2xl font-bold text-gray-900">Campaigns</h1>
           <p className="text-gray-500 text-sm mt-1">{campaigns.length} campaigns</p>
         </div>
         <div className="flex gap-2">
@@ -98,6 +100,14 @@ export default function CampaignsPage() {
       {loading ? (
         <div className="flex items-center justify-center py-20 text-gray-400">
           <RefreshCw className="w-5 h-5 animate-spin mr-2" />Loading...
+        </div>
+      ) : campaigns.length === 0 ? (
+        <div className="text-center py-20 text-gray-400">
+          <p className="text-sm font-medium">No campaigns yet.</p>
+          <p className="text-xs mt-1">Create one to start making calls.</p>
+          <Link href="/campaigns/new" className="inline-flex items-center gap-2 mt-4 px-4 py-2 bg-blue-600 text-white text-sm rounded-lg hover:bg-blue-700">
+            <Plus className="w-4 h-4" />New Campaign
+          </Link>
         </div>
       ) : (
         <div className="grid gap-4">

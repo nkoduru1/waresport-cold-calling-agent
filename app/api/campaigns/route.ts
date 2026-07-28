@@ -20,6 +20,7 @@ export async function POST(req: NextRequest) {
     timezone: body.timezone ?? "America/Chicago",
     status: "draft",
     contacts: body.contacts ?? [],
+    from_number: body.from_number ?? "",
     created_at: new Date().toISOString(),
   };
   saveCampaign(campaign);

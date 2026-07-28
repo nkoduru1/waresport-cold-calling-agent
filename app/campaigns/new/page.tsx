@@ -1,10 +1,9 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
-import { mockContacts } from "@/lib/mock-data";
 import { formatPhone } from "@/lib/utils";
-import { ChevronLeft, Plus, X, CheckSquare, Square, Mic } from "lucide-react";
+import { ChevronLeft, CheckSquare, Square, Mic, Phone } from "lucide-react";
 import Link from "next/link";
 
 const VOICES = [
@@ -16,9 +15,23 @@ const VOICES = [
 
 const DEFAULT_SCRIPT = `Hi, this is an AI assistant calling from Waresport. We help sports clubs manage player registrations, scheduling, and payments — all in one platform.
 
-I was hoping to connect with whoever manages your club's operations. We've been helping clubs across Texas save 8-12 hours per week on admin work, and I'd love to show you how in a quick 15-minute demo.
+I was hoping to connect with whoever manages your club's operations. We've been helping clubs across Texas save 15-20 hours per week on admin work, and I'd love to show you how in a quick 15-minute demo.
 
 Would you have time for a call this week?`;
+
+type Contact = {
+  id: string;
+  club_name: string;
+  phone: string;
+  city: string;
+  state: string;
+};
+
+type PhoneNumber = {
+  id: string;
+  label: string;
+  number: string;
+};
 
 export default function NewCampaignPage() {
   const router = useRouter();
@@ -33,6 +46,23 @@ export default function NewCampaignPage() {
   const [timezone, setTimezone] = useState("America/Chicago");
   const [selectedContacts, setSelectedContacts] = useState<Set<string>>(new Set());
   const [saving, setSaving] = useState(false);
+  const [fromNumberId, setFromNumberId] = useState("");
+
+  const [allContacts, setAllContacts] = useState<Contact[]>([]);
+  const [phoneNumbers, setPhoneNumbers] = useState<PhoneNumber[]>([]);
+
+  useEffect(() => {
+    fetch("/api/contacts")
+      .then((r) => r.json())
+      .then((saved: Contact[]) => setAllContacts(Array.isArray(saved) ? saved : []))
+      .catch(() => {});
+
+    // Load phone numbers for caller ID selection
+    fetch("/api/settings/phone-numbers")
+      .then((r) => r.json())
+      .then(setPhoneNumbers)
+      .catch(() => {});
+  }, []);
 
   const toggleContact = (id: string) => {
     const next = new Set(selectedContacts);
@@ -41,14 +71,16 @@ export default function NewCampaignPage() {
   };
 
   const toggleAll = () => {
-    if (selectedContacts.size === mockContacts.length) setSelectedContacts(new Set());
-    else setSelectedContacts(new Set(mockContacts.map((c) => c.id)));
+    if (selectedContacts.size === allContacts.length) setSelectedContacts(new Set());
+    else setSelectedContacts(new Set(allContacts.map((c) => c.id)));
   };
+
+  const selectedPhoneNumber = phoneNumbers.find((p) => p.id === fromNumberId);
 
   const handleSave = async (launch: boolean) => {
     setSaving(true);
     try {
-      const selected = mockContacts.filter((c) => selectedContacts.has(c.id)).map((c) => ({
+      const selected = allContacts.filter((c) => selectedContacts.has(c.id)).map((c) => ({
         id: c.id,
         club_name: c.club_name,
         phone: c.phone,
@@ -67,6 +99,7 @@ export default function NewCampaignPage() {
           call_time_end: endTime,
           timezone,
           contacts: selected,
+          from_number: selectedPhoneNumber?.number ?? "",
         }),
       });
 
@@ -169,18 +202,41 @@ export default function NewCampaignPage() {
                 />
               </div>
             </div>
-            <div>
-              <label className="text-sm font-medium text-gray-700 block mb-1.5">Timezone</label>
-              <select
-                className="border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-                value={timezone}
-                onChange={(e) => setTimezone(e.target.value)}
-              >
-                <option value="America/New_York">Eastern (ET)</option>
-                <option value="America/Chicago">Central (CT)</option>
-                <option value="America/Denver">Mountain (MT)</option>
-                <option value="America/Los_Angeles">Pacific (PT)</option>
-              </select>
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <label className="text-sm font-medium text-gray-700 block mb-1.5">Timezone</label>
+                <select
+                  className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  value={timezone}
+                  onChange={(e) => setTimezone(e.target.value)}
+                >
+                  <option value="America/New_York">Eastern (ET)</option>
+                  <option value="America/Chicago">Central (CT)</option>
+                  <option value="America/Denver">Mountain (MT)</option>
+                  <option value="America/Los_Angeles">Pacific (PT)</option>
+                </select>
+              </div>
+              <div>
+                <label className="text-sm font-medium text-gray-700 block mb-1.5">
+                  Outbound Phone Number <span className="text-gray-400 font-normal">(optional)</span>
+                </label>
+                {phoneNumbers.length === 0 ? (
+                  <p className="text-xs text-gray-400 mt-2">
+                    No phone numbers added yet. <Link href="/settings" className="text-blue-500 hover:underline">Add one in Settings</Link>.
+                  </p>
+                ) : (
+                  <select
+                    className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    value={fromNumberId}
+                    onChange={(e) => setFromNumberId(e.target.value)}
+                  >
+                    <option value="">Use Bland.ai default</option>
+                    {phoneNumbers.map((p) => (
+                      <option key={p.id} value={p.id}>{p.label} ({p.number})</option>
+                    ))}
+                  </select>
+                )}
+              </div>
             </div>
           </div>
         )}
@@ -229,27 +285,38 @@ export default function NewCampaignPage() {
             <div className="flex items-center justify-between">
               <h2 className="font-semibold text-gray-800">Select Contacts</h2>
               <button onClick={toggleAll} className="text-sm text-blue-600 hover:underline">
-                {selectedContacts.size === mockContacts.length ? "Deselect All" : "Select All"}
+                {selectedContacts.size === allContacts.length ? "Deselect All" : "Select All"}
               </button>
             </div>
-            <p className="text-sm text-gray-500">{selectedContacts.size} contacts selected</p>
-            <div className="border border-gray-200 rounded-lg overflow-hidden max-h-80 overflow-y-auto">
-              {mockContacts.map((c) => (
-                <div
-                  key={c.id}
-                  onClick={() => toggleContact(c.id)}
-                  className="flex items-center gap-3 p-3 border-b border-gray-100 last:border-0 cursor-pointer hover:bg-gray-50"
-                >
-                  {selectedContacts.has(c.id)
-                    ? <CheckSquare className="w-4 h-4 text-blue-500 shrink-0" />
-                    : <Square className="w-4 h-4 text-gray-300 shrink-0" />}
-                  <div className="flex-1 min-w-0">
-                    <p className="text-sm font-medium text-gray-800">{c.club_name}</p>
-                    <p className="text-xs text-gray-500">{formatPhone(c.phone)} · {c.city}, {c.state}</p>
+            <p className="text-sm text-gray-500">
+              {selectedContacts.size} of {allContacts.length} contacts selected
+            </p>
+            {allContacts.length === 0 ? (
+              <div className="text-center py-10 text-gray-400 border border-dashed border-gray-200 rounded-lg">
+                <p className="text-sm">No contacts yet.</p>
+                <p className="text-xs mt-1">
+                  <Link href="/contacts" className="text-blue-500 hover:underline">Add contacts</Link> in the Find Contacts page first.
+                </p>
+              </div>
+            ) : (
+              <div className="border border-gray-200 rounded-lg overflow-hidden max-h-80 overflow-y-auto">
+                {allContacts.map((c) => (
+                  <div
+                    key={c.id}
+                    onClick={() => toggleContact(c.id)}
+                    className="flex items-center gap-3 p-3 border-b border-gray-100 last:border-0 cursor-pointer hover:bg-gray-50"
+                  >
+                    {selectedContacts.has(c.id)
+                      ? <CheckSquare className="w-4 h-4 text-blue-500 shrink-0" />
+                      : <Square className="w-4 h-4 text-gray-300 shrink-0" />}
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm font-medium text-gray-800">{c.club_name}</p>
+                      <p className="text-xs text-gray-500">{formatPhone(c.phone)} · {c.city}{c.state ? `, ${c.state}` : ""}</p>
+                    </div>
                   </div>
-                </div>
-              ))}
-            </div>
+                ))}
+              </div>
+            )}
           </div>
         )}
 
@@ -277,6 +344,13 @@ export default function NewCampaignPage() {
               <div className="flex justify-between text-sm">
                 <span className="text-gray-500">Voice</span>
                 <span className="font-medium text-gray-800">{VOICES.find((v) => v.id === voice)?.label}</span>
+              </div>
+              <div className="flex justify-between text-sm">
+                <span className="text-gray-500">Outbound Number</span>
+                <span className="font-medium text-gray-800 flex items-center gap-1">
+                  <Phone className="w-3 h-3" />
+                  {selectedPhoneNumber ? `${selectedPhoneNumber.label} (${selectedPhoneNumber.number})` : "Bland.ai default"}
+                </span>
               </div>
             </div>
             <div className="bg-gray-50 rounded-lg p-3">

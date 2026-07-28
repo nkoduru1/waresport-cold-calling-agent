@@ -9,15 +9,17 @@ import {
   Megaphone,
   Phone,
   BarChart3,
+  Settings,
 } from "lucide-react";
 import Image from "next/image";
 
 const nav = [
   { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
-  { href: "/contacts", label: "Contacts", icon: Users },
+  { href: "/contacts", label: "Find Contacts", icon: Users },
   { href: "/campaigns", label: "Campaigns", icon: Megaphone },
   { href: "/calls", label: "Calls", icon: Phone },
   { href: "/analytics", label: "Analytics", icon: BarChart3 },
+  { href: "/settings", label: "Settings", icon: Settings },
 ];
 
 export default function Sidebar() {

@@ -16,6 +16,8 @@ export interface BlandCallOptions {
   wait_for_greeting?: boolean;
   webhook?: string;
   max_duration?: number;
+  from?: string;
+  voicemail_message?: string;
   metadata?: Record<string, string>;
 }
 
@@ -50,7 +52,10 @@ export async function makeCall(opts: BlandCallOptions): Promise<{ call_id: strin
       record: opts.record ?? true,
       wait_for_greeting: opts.wait_for_greeting ?? true,
       max_duration: opts.max_duration ?? 10,
+      voicemail_action: "leave_message",
+      voicemail_message: opts.voicemail_message ?? "Hi, this is an AI assistant calling from Waresport. We help sports clubs save 15 to 20 hours per week on admin work by managing registrations, scheduling, and payments all in one platform. I would love to show you a quick 15 minute demo. Please visit waresport.com or call us back. Thank you and have a great day!",
       webhook: opts.webhook,
+      ...(opts.from ? { from: opts.from } : {}),
       metadata: opts.metadata ?? {},
     }),
   });

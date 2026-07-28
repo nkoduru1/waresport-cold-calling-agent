@@ -1,7 +1,6 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { mockCampaigns, mockCalls } from "@/lib/mock-data";
 import { formatDuration, formatPhone } from "@/lib/utils";
 import { useParams } from "next/navigation";
 import Link from "next/link";
@@ -11,7 +10,7 @@ const outcomeColors: Record<string, string> = {
   "demo-booked": "bg-green-100 text-green-700",
   "interested": "bg-blue-100 text-blue-700",
   "callback": "bg-yellow-100 text-yellow-700",
-  "not-interested": "bg-red-100 text-red-700",
+  "not-interested": "bg-gray-100 text-gray-600",
   "voicemail": "bg-purple-100 text-purple-700",
   "no-answer": "bg-gray-100 text-gray-600",
   "pending": "bg-gray-100 text-gray-500",
@@ -22,9 +21,9 @@ const outcomeLabel: Record<string, string> = {
   "demo-booked": "Demo Booked",
   "interested": "Interested",
   "callback": "Callback",
-  "not-interested": "Not Interested",
+  "not-interested": "Didn't Pick Up",
   "voicemail": "Voicemail",
-  "no-answer": "No Answer",
+  "no-answer": "Didn't Pick Up",
   "pending": "In Progress",
   "completed": "Completed",
 };
@@ -65,33 +64,31 @@ export default function CampaignDetailPage() {
   const [campaign, setCampaign] = useState<Campaign | null>(null);
   const [calls, setCalls] = useState<AnyCall[]>([]);
   const [loading, setLoading] = useState(true);
+  const [notFound, setNotFound] = useState(false);
   const [expanded, setExpanded] = useState<string | null>(null);
   const [tabs, setTabs] = useState<Record<string, "summary" | "transcript">>({});
   const [markingDemo, setMarkingDemo] = useState<string | null>(null);
 
   const load = async () => {
     setLoading(true);
-    // Try real API first
     try {
       const res = await fetch(`/api/campaigns/${id}`);
-      if (res.ok) {
-        const real = await res.json();
-        setCampaign({ ...real, contact_count: real.contacts?.length ?? 0, calls_made: 0, demos_booked: 0 });
-        const callsRes = await fetch(`/api/calls?campaign_id=${id}`);
-        const liveCalls: AnyCall[] = await callsRes.json();
-        setCalls(liveCalls);
-        setLoading(false);
-        return;
-      }
-    } catch { /* fall through to mock */ }
-
-    // Fall back to mock
-    const mock = mockCampaigns.find((c) => c.id === id);
-    if (mock) {
-      setCampaign(mock);
-      setCalls(mockCalls.filter((c) => c.campaign_id === id) as unknown as AnyCall[]);
+      if (!res.ok) { setNotFound(true); setLoading(false); return; }
+      const real = await res.json();
+      const callsRes = await fetch(`/api/calls?campaign_id=${id}`);
+      const liveCalls: AnyCall[] = await callsRes.json();
+      setCalls(liveCalls);
+      setCampaign({
+        ...real,
+        contact_count: real.contacts?.length ?? 0,
+        calls_made: liveCalls.length,
+        demos_booked: liveCalls.filter((c) => c.outcome === "demo-booked").length,
+      });
+    } catch {
+      setNotFound(true);
+    } finally {
+      setLoading(false);
     }
-    setLoading(false);
   };
 
   useEffect(() => { load(); }, [id]);
@@ -126,7 +123,7 @@ export default function CampaignDetailPage() {
     );
   }
 
-  if (!campaign) {
+  if (notFound || !campaign) {
     return (
       <div className="p-6">
         <Link href="/campaigns" className="text-blue-600 hover:underline text-sm flex items-center gap-1">
@@ -223,11 +220,11 @@ export default function CampaignDetailPage() {
                   >
                     <div className={`w-9 h-9 rounded-full flex items-center justify-center shrink-0 ${
                       call.outcome === "demo-booked" ? "bg-green-100" :
-                      call.outcome === "no-answer" ? "bg-gray-100" : "bg-blue-100"
+                      call.outcome === "no-answer" || call.outcome === "not-interested" ? "bg-gray-100" : "bg-blue-100"
                     }`}>
                       <Phone className={`w-4 h-4 ${
                         call.outcome === "demo-booked" ? "text-green-600" :
-                        call.outcome === "no-answer" ? "text-gray-400" : "text-blue-500"
+                        call.outcome === "no-answer" || call.outcome === "not-interested" ? "text-gray-400" : "text-blue-500"
                       }`} />
                     </div>
                     <div className="flex-1 min-w-0">
@@ -267,7 +264,7 @@ export default function CampaignDetailPage() {
                             <FileText className="w-3.5 h-3.5" />Transcript
                           </button>
                         </div>
-                        {call.outcome !== "demo-booked" && call.outcome !== "no-answer" && (
+                        {call.outcome !== "demo-booked" && call.outcome !== "no-answer" && call.outcome !== "not-interested" && (
                           <button
                             onClick={() => markDemoBooked(call.id)}
                             disabled={markingDemo === call.id}

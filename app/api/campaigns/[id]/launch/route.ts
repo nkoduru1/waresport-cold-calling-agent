@@ -8,7 +8,8 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
   if (!campaign) return NextResponse.json({ error: "Campaign not found" }, { status: 404 });
 
   const origin = req.headers.get("origin") ?? req.nextUrl.origin;
-  const webhookUrl = `${origin}/api/webhooks/bland`;
+  const isLocal = origin.includes("localhost") || origin.includes("127.0.0.1");
+  const webhookUrl = isLocal ? undefined : `${origin}/api/webhooks/bland`;
 
   const results: Array<{ contact: string; call_id?: string; error?: string }> = [];
 
@@ -23,7 +24,8 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
         voice: campaign.voice_id,
         record: true,
         wait_for_greeting: true,
-        webhook: webhookUrl,
+        ...(webhookUrl ? { webhook: webhookUrl } : {}),
+        ...(campaign.from_number ? { from: campaign.from_number } : {}),
         metadata: {
           campaign_id: campaign.id,
           campaign_name: campaign.name,

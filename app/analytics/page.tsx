@@ -1,7 +1,6 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { mockAnalytics } from "@/lib/mock-data";
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid,
   Tooltip, ResponsiveContainer, PieChart, Pie, Cell, Legend,
@@ -12,7 +11,7 @@ const PIE_COLORS: Record<string, string> = {
   "demo-booked": "#22c55e",
   "interested": "#3b82f6",
   "callback": "#f59e0b",
-  "not-interested": "#ef4444",
+  "not-interested": "#6b7280",
   "voicemail": "#8b5cf6",
   "no-answer": "#6b7280",
   "pending": "#d1d5db",
@@ -22,9 +21,9 @@ const OUTCOME_LABELS: Record<string, string> = {
   "demo-booked": "Demo Booked",
   "interested": "Interested",
   "callback": "Callback",
-  "not-interested": "Not Interested",
+  "not-interested": "Didn't Pick Up",
   "voicemail": "Voicemail",
-  "no-answer": "No Answer",
+  "no-answer": "Didn't Pick Up",
   "pending": "In Progress",
 };
 
@@ -37,7 +36,7 @@ function fmt(s: number) {
 
 function buildStats(calls: AnyCall[]) {
   const total = calls.length;
-  const answered = calls.filter((c) => c.outcome !== "no-answer" && c.outcome !== "pending").length;
+  const answered = calls.filter((c) => c.outcome !== "no-answer" && c.outcome !== "not-interested" && c.outcome !== "pending").length;
   const demos = calls.filter((c) => c.outcome === "demo-booked").length;
   const pickupRate = total > 0 ? Math.round((answered / total) * 100) : 0;
   const demoRate = answered > 0 ? Math.round((demos / answered) * 100) : 0;
@@ -80,7 +79,20 @@ function buildStats(calls: AnyCall[]) {
   ).map(([k, v]) => ({ outcome: OUTCOME_LABELS[k] ?? k, avg: Math.round(v.total / v.count) }))
     .sort((a, b) => b.avg - a.avg);
 
-  return { total, answered, demos, pickupRate, demoRate, avgDur, pie, funnelData, byCampaign, avgByOutcome };
+  const dailyData = Object.entries(
+    calls.reduce((acc, c) => {
+      const date = new Date(c.started_at).toLocaleDateString("en-US", { month: "short", day: "numeric" });
+      if (!acc[date]) acc[date] = { calls: 0, pickups: 0, demos: 0 };
+      acc[date].calls++;
+      if (c.outcome !== "no-answer" && c.outcome !== "not-interested" && c.outcome !== "pending") acc[date].pickups++;
+      if (c.outcome === "demo-booked") acc[date].demos++;
+      return acc;
+    }, {} as Record<string, { calls: number; pickups: number; demos: number }>)
+  )
+    .sort(([a], [b]) => new Date(a + " 2025").getTime() - new Date(b + " 2025").getTime())
+    .map(([date, data]) => ({ date, ...data }));
+
+  return { total, answered, demos, pickupRate, demoRate, avgDur, pie, funnelData, byCampaign, avgByOutcome, dailyData };
 }
 
 export default function AnalyticsPage() {
@@ -195,8 +207,11 @@ export default function AnalyticsPage() {
       {/* Daily Chart */}
       <div className="bg-white rounded-xl border border-gray-200 p-5">
         <h2 className="text-sm font-semibold text-gray-700 mb-4">Daily Call Volume</h2>
+        {s.dailyData.length === 0 ? (
+          <div className="flex items-center justify-center h-[220px] text-gray-300 text-sm">No call data yet</div>
+        ) : (
         <ResponsiveContainer width="100%" height={220}>
-          <BarChart data={mockAnalytics.daily_calls} barGap={4}>
+          <BarChart data={s.dailyData} barGap={4}>
             <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" vertical={false} />
             <XAxis dataKey="date" tick={{ fontSize: 11, fill: "#9ca3af" }} axisLine={false} tickLine={false} />
             <YAxis tick={{ fontSize: 11, fill: "#9ca3af" }} axisLine={false} tickLine={false} />
@@ -207,6 +222,7 @@ export default function AnalyticsPage() {
             <Legend wrapperStyle={{ fontSize: 12 }} />
           </BarChart>
         </ResponsiveContainer>
+        )}
       </div>
 
       {/* Campaign Table + Avg Duration */}

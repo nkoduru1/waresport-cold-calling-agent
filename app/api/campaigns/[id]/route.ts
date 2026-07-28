@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getCampaign, updateCampaignStatus } from "@/lib/store";
+import { getCampaign, updateCampaignStatus, updateCampaignContacts } from "@/lib/store";
 
 export async function GET(_req: NextRequest, { params }: { params: { id: string } }) {
   const campaign = getCampaign(params.id);
@@ -8,7 +8,12 @@ export async function GET(_req: NextRequest, { params }: { params: { id: string 
 }
 
 export async function PATCH(req: NextRequest, { params }: { params: { id: string } }) {
-  const { status } = await req.json();
-  updateCampaignStatus(params.id, status);
+  const body = await req.json();
+  if (body.status) {
+    updateCampaignStatus(params.id, body.status);
+  }
+  if (body.contacts) {
+    updateCampaignContacts(params.id, body.contacts);
+  }
   return NextResponse.json({ ok: true });
 }

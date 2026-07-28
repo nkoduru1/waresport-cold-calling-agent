@@ -26,21 +26,50 @@ interface StoredCampaign {
   timezone: string;
   status: string;
   contacts: Array<{ id: string; club_name: string; phone: string }>;
+  from_number?: string;
+  created_at: string;
+}
+
+export interface StoredContact {
+  id: string;
+  club_name: string;
+  phone: string;
+  email?: string | null;
+  city?: string;
+  state?: string;
+  source: string;
+  verified: boolean;
+  created_at: string;
+  notes?: string;
+}
+
+export interface StoredPhoneNumber {
+  id: string;
+  label: string;
+  number: string;
   created_at: string;
 }
 
 interface Store {
   campaigns: StoredCampaign[];
-  contacts: Array<{ id: string; club_name: string; phone: string; email?: string; city?: string; state?: string; source: string; verified: boolean; created_at: string }>;
+  contacts: StoredContact[];
   calls: StoredCall[];
   call_outcomes: Record<string, string>;
+  phone_numbers: StoredPhoneNumber[];
 }
 
 function read(): Store {
   try {
-    return JSON.parse(fs.readFileSync(STORE_PATH, "utf-8"));
+    const data = JSON.parse(fs.readFileSync(STORE_PATH, "utf-8"));
+    return {
+      campaigns: data.campaigns ?? [],
+      contacts: data.contacts ?? [],
+      calls: data.calls ?? [],
+      call_outcomes: data.call_outcomes ?? {},
+      phone_numbers: data.phone_numbers ?? [],
+    };
   } catch {
-    return { campaigns: [], contacts: [], calls: [], call_outcomes: {} };
+    return { campaigns: [], contacts: [], calls: [], call_outcomes: {}, phone_numbers: [] };
   }
 }
 
@@ -71,6 +100,21 @@ export function updateCampaignStatus(id: string, status: string) {
   write(store);
 }
 
+export function updateCampaignContacts(id: string, newContacts: Array<{ id: string; club_name: string; phone: string }>) {
+  const store = read();
+  const c = store.campaigns.find((c) => c.id === id);
+  if (c) {
+    const existing = new Set(c.contacts.map((x) => x.phone));
+    newContacts.forEach((contact) => {
+      if (!existing.has(contact.phone)) {
+        c.contacts.push(contact);
+        existing.add(contact.phone);
+      }
+    });
+  }
+  write(store);
+}
+
 export function saveCall(call: StoredCall) {
   const store = read();
   store.calls.push(call);
@@ -91,5 +135,44 @@ export function setCallOutcome(id: string, outcome: string) {
   const store = read();
   if (!store.call_outcomes) store.call_outcomes = {};
   store.call_outcomes[id] = outcome;
+  write(store);
+}
+
+export function getContacts(): StoredContact[] {
+  return read().contacts;
+}
+
+export function saveContact(contact: StoredContact) {
+  const store = read();
+  const idx = store.contacts.findIndex((c) => c.phone === contact.phone);
+  if (idx >= 0) {
+    store.contacts[idx] = { ...store.contacts[idx], ...contact };
+  } else {
+    store.contacts.push(contact);
+  }
+  write(store);
+}
+
+export function deleteContact(id: string) {
+  const store = read();
+  store.contacts = store.contacts.filter((c) => c.id !== id);
+  write(store);
+}
+
+export function getPhoneNumbers(): StoredPhoneNumber[] {
+  return read().phone_numbers;
+}
+
+export function savePhoneNumber(pn: StoredPhoneNumber) {
+  const store = read();
+  const idx = store.phone_numbers.findIndex((p) => p.id === pn.id);
+  if (idx >= 0) store.phone_numbers[idx] = pn;
+  else store.phone_numbers.push(pn);
+  write(store);
+}
+
+export function deletePhoneNumber(id: string) {
+  const store = read();
+  store.phone_numbers = store.phone_numbers.filter((p) => p.id !== id);
   write(store);
 }

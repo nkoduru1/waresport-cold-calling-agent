@@ -8,7 +8,7 @@ const outcomeColors: Record<string, string> = {
   "demo-booked": "bg-green-100 text-green-700",
   "interested": "bg-blue-100 text-blue-700",
   "callback": "bg-yellow-100 text-yellow-700",
-  "not-interested": "bg-red-100 text-red-700",
+  "not-interested": "bg-gray-100 text-gray-600",
   "voicemail": "bg-purple-100 text-purple-700",
   "no-answer": "bg-gray-100 text-gray-600",
   "wrong-number": "bg-orange-100 text-orange-700",
@@ -20,9 +20,9 @@ const outcomeLabel: Record<string, string> = {
   "demo-booked": "Demo Booked",
   "interested": "Interested",
   "callback": "Callback",
-  "not-interested": "Not Interested",
+  "not-interested": "Didn't Pick Up",
   "voicemail": "Voicemail",
-  "no-answer": "No Answer",
+  "no-answer": "Didn't Pick Up",
   "wrong-number": "Wrong Number",
   "pending": "In Progress",
   "completed": "Completed",
@@ -118,9 +118,8 @@ export default function CallsPage() {
           <option value="demo-booked">Demo Booked</option>
           <option value="interested">Interested</option>
           <option value="callback">Callback</option>
-          <option value="not-interested">Not Interested</option>
+          <option value="no-answer">Didn't Pick Up</option>
           <option value="voicemail">Voicemail</option>
-          <option value="no-answer">No Answer</option>
         </select>
       </div>
 
@@ -143,13 +142,11 @@ export default function CallsPage() {
                 >
                   <div className={`w-9 h-9 rounded-full flex items-center justify-center shrink-0 ${
                     call.outcome === "demo-booked" ? "bg-green-100" :
-                    call.outcome === "no-answer" ? "bg-gray-100" :
-                    call.outcome === "not-interested" ? "bg-red-100" : "bg-blue-100"
+                    call.outcome === "no-answer" || call.outcome === "not-interested" ? "bg-gray-100" : "bg-blue-100"
                   }`}>
                     <Phone className={`w-4 h-4 ${
                       call.outcome === "demo-booked" ? "text-green-600" :
-                      call.outcome === "no-answer" ? "text-gray-400" :
-                      call.outcome === "not-interested" ? "text-red-500" : "text-blue-500"
+                      call.outcome === "no-answer" || call.outcome === "not-interested" ? "text-gray-400" : "text-blue-500"
                     }`} />
                   </div>
 
