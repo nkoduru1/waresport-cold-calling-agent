@@ -2,29 +2,47 @@
 
 import { useState, useEffect } from "react";
 import { formatPhone } from "@/lib/utils";
-import { Search, Upload, MapPin, CheckCircle, XCircle, Loader2, Globe, BookUser, Plus, Trash2 } from "lucide-react";
+import { Search, Upload, MapPin, CheckCircle, XCircle, Loader2, Globe, BookUser, Plus, Trash2, ExternalLink, Mail, Star, Info } from "lucide-react";
 
 type Contact = {
   id: string;
   club_name: string;
   phone: string;
   email?: string | null;
+  website?: string | null;
+  address?: string | null;
   city: string;
   state: string;
   source: string;
   verified: boolean;
   created_at: string;
   notes?: string;
+  rating?: number | null;
+  reviews?: number | null;
+};
+
+type SearchMeta = {
+  total: number;
+  new_count: number;
+  existing_count: number;
+  osm_count?: number;
+  serp_count?: number;
+  foursquare_count?: number;
+  serp_exhausted?: boolean;
 };
 
 const sourceColors: Record<string, string> = {
   google_places: "bg-blue-100 text-blue-700",
+  openstreetmap: "bg-green-100 text-green-700",
+  foursquare: "bg-orange-100 text-orange-600",
   import: "bg-purple-100 text-purple-700",
   manual: "bg-gray-100 text-gray-600",
 };
 
 const sourceLabel: Record<string, string> = {
   google_places: "Google Maps",
+  openstreetmap: "OpenStreetMap",
+  foursquare: "Foursquare",
   import: "Imported",
   manual: "Manual",
 };
@@ -37,6 +55,7 @@ export default function ContactsPage() {
   const [findCity, setFindCity] = useState("");
   const [finding, setFinding] = useState(false);
   const [findResults, setFindResults] = useState<Contact[]>([]);
+  const [findMeta, setFindMeta] = useState<SearchMeta | null>(null);
   const [findError, setFindError] = useState<string | null>(null);
   const [importText, setImportText] = useState("");
   const [showImport, setShowImport] = useState(false);
@@ -83,6 +102,7 @@ export default function ContactsPage() {
     if (!findQuery || !findCity) return;
     setFinding(true);
     setFindResults([]);
+    setFindMeta(null);
     setFindError(null);
     try {
       const res = await fetch(
@@ -90,11 +110,14 @@ export default function ContactsPage() {
       );
       const data = await res.json();
       if (!res.ok) {
-        setFindError(data.error ?? "Search failed. Try a different city or sport.");
+        setFindError(data.error ?? "Search failed. Try a different city or club type.");
+      } else if (data.all_saved) {
+        setFindError(data.suggestion ?? `All clubs found in ${findCity} are already in your contacts.`);
       } else if (data.results.length === 0) {
-        setFindError(`Found ${data.total} clubs in ${findCity} but none had phone numbers listed yet. Try a larger city or import numbers manually.`);
+        setFindError(`Found clubs in ${findCity} but none had phone numbers listed. Try a more specific city or import manually.`);
       } else {
         setFindResults(data.results);
+        setFindMeta({ total: data.total, new_count: data.new_count, existing_count: data.existing_count, osm_count: data.osm_count, serp_count: data.serp_count, foursquare_count: data.foursquare_count, serp_exhausted: data.serp_exhausted });
       }
     } catch {
       setFindError("Network error — check your connection and try again.");
@@ -116,6 +139,7 @@ export default function ContactsPage() {
   const addFindResultsToBook = async () => {
     await persistContacts(findResults);
     setFindResults([]);
+    setFindMeta(null);
     setFindError(null);
   };
 
@@ -130,8 +154,9 @@ export default function ContactsPage() {
           club_name: parts[0],
           phone: parts[1].replace(/\D/g, ""),
           email: parts[2] || null,
-          city: parts[3] || "",
-          state: parts[4] || "",
+          website: parts[3] || null,
+          city: parts[4] || "",
+          state: parts[5] || "",
           source: "import" as const,
           verified: false,
           created_at: new Date().toISOString(),
@@ -171,6 +196,7 @@ export default function ContactsPage() {
 
   const handleDeleteContact = async (id: string) => {
     setDeletingId(id);
+    await fetch(`/api/contacts/${id}`, { method: "DELETE" });
     setSavedContacts((prev) => prev.filter((c) => c.id !== id));
     setDeletingId(null);
   };
@@ -203,6 +229,61 @@ export default function ContactsPage() {
       c.city.toLowerCase().includes(bookSearch.toLowerCase()) ||
       c.phone.includes(bookSearch)
   );
+
+  const manualForm = showManual ? (
+    <div className="bg-white rounded-xl border border-gray-200 p-5">
+      <h2 className="font-semibold text-gray-800 mb-3">Add Contact Manually</h2>
+      <div className="grid grid-cols-2 gap-3 mb-3">
+        <input
+          className="border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+          placeholder="Club / Company Name *"
+          value={manualName}
+          onChange={(e) => setManualName(e.target.value)}
+        />
+        <input
+          className="border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+          placeholder="Phone Number *"
+          value={manualPhone}
+          onChange={(e) => setManualPhone(e.target.value)}
+        />
+        <input
+          className="border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+          placeholder="Email (optional)"
+          value={manualEmail}
+          onChange={(e) => setManualEmail(e.target.value)}
+        />
+        <div className="flex gap-2">
+          <input
+            className="flex-1 border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+            placeholder="City"
+            value={manualCity}
+            onChange={(e) => setManualCity(e.target.value)}
+          />
+          <input
+            className="w-20 border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+            placeholder="State"
+            value={manualState}
+            onChange={(e) => setManualState(e.target.value)}
+          />
+        </div>
+      </div>
+      <div className="flex gap-2">
+        <button
+          onClick={handleManualAdd}
+          disabled={!manualName || !manualPhone}
+          className="px-4 py-2 bg-blue-600 text-white text-sm rounded-lg hover:bg-blue-700 disabled:opacity-50"
+        >
+          Save to Contact Book
+        </button>
+        <button
+          onClick={() => setShowManual(false)}
+          className="px-4 py-2 border border-gray-200 text-gray-600 text-sm rounded-lg hover:bg-gray-50"
+        >
+          Cancel
+        </button>
+      </div>
+    </div>
+  ) : null;
 
   return (
     <div className="p-6 space-y-5">
@@ -252,67 +333,14 @@ export default function ContactsPage() {
       {/* ── FIND CONTACTS TAB ── */}
       {activeTab === "find" && (
         <div className="space-y-4">
-          {/* Manual add form */}
-          {showManual && (
-            <div className="bg-white rounded-xl border border-gray-200 p-5">
-              <h2 className="font-semibold text-gray-800 mb-3">Add Contact Manually</h2>
-              <div className="grid grid-cols-2 gap-3 mb-3">
-                <input
-                  className="border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  placeholder="Club / Company Name *"
-                  value={manualName}
-                  onChange={(e) => setManualName(e.target.value)}
-                />
-                <input
-                  className="border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  placeholder="Phone Number *"
-                  value={manualPhone}
-                  onChange={(e) => setManualPhone(e.target.value)}
-                />
-                <input
-                  className="border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  placeholder="Email (optional)"
-                  value={manualEmail}
-                  onChange={(e) => setManualEmail(e.target.value)}
-                />
-                <div className="flex gap-2">
-                  <input
-                    className="flex-1 border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-                    placeholder="City"
-                    value={manualCity}
-                    onChange={(e) => setManualCity(e.target.value)}
-                  />
-                  <input
-                    className="w-20 border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-                    placeholder="State"
-                    value={manualState}
-                    onChange={(e) => setManualState(e.target.value)}
-                  />
-                </div>
-              </div>
-              <div className="flex gap-2">
-                <button
-                  onClick={handleManualAdd}
-                  disabled={!manualName || !manualPhone}
-                  className="px-4 py-2 bg-blue-600 text-white text-sm rounded-lg hover:bg-blue-700 disabled:opacity-50"
-                >
-                  Save to Contact Book
-                </button>
-                <button
-                  onClick={() => setShowManual(false)}
-                  className="px-4 py-2 border border-gray-200 text-gray-600 text-sm rounded-lg hover:bg-gray-50"
-                >
-                  Cancel
-                </button>
-              </div>
-            </div>
-          )}
+          {manualForm}
 
-          {/* Search finder */}
+          {/* Search panel */}
           <div className="bg-white rounded-xl border border-gray-200 p-5">
             <div className="flex items-center gap-2 mb-4">
               <Globe className="w-4 h-4 text-blue-500" />
-              <h2 className="font-semibold text-gray-800">Find Club Phone Numbers (Google Maps)</h2>
+              <h2 className="font-semibold text-gray-800">Find Clubs</h2>
+              <span className="text-xs text-gray-400 ml-1">— searches Google Maps + OpenStreetMap for comprehensive results</span>
             </div>
             <div className="flex gap-3 mb-4">
               <input
@@ -323,8 +351,8 @@ export default function ContactsPage() {
                 onKeyDown={(e) => e.key === "Enter" && handleFind()}
               />
               <input
-                className="w-40 border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-                placeholder="City (e.g. Austin)"
+                className="w-44 border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                placeholder="City or State (e.g. Florida)"
                 value={findCity}
                 onChange={(e) => setFindCity(e.target.value)}
                 onKeyDown={(e) => e.key === "Enter" && handleFind()}
@@ -339,6 +367,24 @@ export default function ContactsPage() {
               </button>
             </div>
 
+            {/* Results meta banner */}
+            {findMeta && (
+              <div className={`mb-4 flex items-start gap-2 p-3 rounded-lg text-sm border ${findMeta.serp_exhausted ? "bg-yellow-50 border-yellow-200 text-yellow-800" : "bg-blue-50 border-blue-100 text-blue-700"}`}>
+                <Info className="w-4 h-4 mt-0.5 shrink-0" />
+                <span>
+                  {findMeta.serp_exhausted && <><strong>Google Maps quota reached</strong> — using Foursquare + OpenStreetMap as backup. </>}
+                  Found <strong>{findMeta.total}</strong> clubs total
+                  {" ("}
+                  {(findMeta.serp_count ?? 0) > 0 && `${findMeta.serp_count} Google Maps`}
+                  {(findMeta.foursquare_count ?? 0) > 0 && `${(findMeta.serp_count ?? 0) > 0 ? ", " : ""}${findMeta.foursquare_count} Foursquare`}
+                  {(findMeta.osm_count ?? 0) > 0 && `${((findMeta.serp_count ?? 0) + (findMeta.foursquare_count ?? 0)) > 0 ? ", " : ""}${findMeta.osm_count} OpenStreetMap`}
+                  {")."}
+                  {findMeta.existing_count > 0 && <> {findMeta.existing_count} already in contacts hidden.</>}
+                  {" "}Showing <strong>{findMeta.new_count}</strong> new clubs.
+                </span>
+              </div>
+            )}
+
             {findError && (
               <div className="mb-4 p-3 bg-yellow-50 border border-yellow-200 rounded-lg text-sm text-yellow-800">
                 {findError}
@@ -347,22 +393,52 @@ export default function ContactsPage() {
 
             {findResults.length > 0 && (
               <div>
+                <p className="text-xs text-gray-400 mb-2">{findResults.length} new clubs found</p>
                 <div className="space-y-2 mb-3">
                   {findResults.map((r) => (
-                    <div key={r.id} className="flex items-center gap-3 p-3 bg-gray-50 rounded-lg">
-                      <div className="flex-1">
-                        <p className="text-sm font-medium text-gray-800">{r.club_name}</p>
-                        <div className="flex items-center gap-3 mt-0.5">
+                    <div key={r.id} className="flex items-start gap-3 p-3 bg-gray-50 rounded-lg">
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <p className="text-sm font-medium text-gray-800">{r.club_name}</p>
+                          {r.rating != null && (
+                            <span className="flex items-center gap-0.5 text-xs text-amber-500">
+                              <Star className="w-3 h-3 fill-amber-400 stroke-amber-400" />
+                              {r.rating}
+                              {r.reviews != null && <span className="text-gray-400 ml-0.5">({r.reviews})</span>}
+                            </span>
+                          )}
+                        </div>
+                        <div className="flex flex-wrap items-center gap-x-3 gap-y-1 mt-1">
                           <span className="text-xs text-gray-500">{formatPhone(r.phone)}</span>
-                          {r.email && <span className="text-xs text-gray-400">{r.email}</span>}
-                          <span className="flex items-center gap-1 text-xs text-gray-400">
-                            <MapPin className="w-3 h-3" />{r.city}, {r.state}
-                          </span>
+                          {r.address && (
+                            <span className="flex items-center gap-1 text-xs text-gray-400">
+                              <MapPin className="w-3 h-3" />{r.address}
+                            </span>
+                          )}
+                          {r.email && (
+                            <a
+                              href={`mailto:${r.email}`}
+                              className="flex items-center gap-1 text-xs text-blue-500 hover:underline"
+                            >
+                              <Mail className="w-3 h-3" />{r.email}
+                            </a>
+                          )}
+                          {r.website && (
+                            <a
+                              href={r.website}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="flex items-center gap-1 text-xs text-blue-500 hover:underline"
+                            >
+                              <ExternalLink className="w-3 h-3" />
+                              {new URL(r.website).hostname.replace(/^www\./, "")}
+                            </a>
+                          )}
                         </div>
                       </div>
                       {r.verified
-                        ? <CheckCircle className="w-4 h-4 text-green-500 shrink-0" />
-                        : <XCircle className="w-4 h-4 text-gray-300 shrink-0" />}
+                        ? <CheckCircle className="w-4 h-4 text-green-500 shrink-0 mt-0.5" />
+                        : <XCircle className="w-4 h-4 text-gray-300 shrink-0 mt-0.5" />}
                     </div>
                   ))}
                 </div>
@@ -375,7 +451,7 @@ export default function ContactsPage() {
                     {addingToBook ? "Saving..." : `Save ${findResults.length} contacts to Contact Book`}
                   </button>
                   <button
-                    onClick={() => setFindResults([])}
+                    onClick={() => { setFindResults([]); setFindMeta(null); }}
                     className="px-4 py-2 border border-gray-200 text-gray-600 text-sm rounded-lg hover:bg-gray-50"
                   >
                     Discard
@@ -400,11 +476,11 @@ export default function ContactsPage() {
             {showImport && (
               <>
                 <p className="text-xs text-gray-500 mb-3">
-                  Paste CSV rows: <code className="bg-gray-100 px-1 rounded">Club Name, Phone, Email (opt), City (opt), State (opt)</code>
+                  Paste CSV rows: <code className="bg-gray-100 px-1 rounded">Club Name, Phone, Email (opt), Website (opt), City (opt), State (opt)</code>
                 </p>
                 <textarea
                   className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm font-mono focus:outline-none focus:ring-2 focus:ring-blue-500 h-32 resize-none"
-                  placeholder={"Austin FC, 5124751000, info@austinfc.com, Austin, TX\nDallas Soccer Club, 2145550100"}
+                  placeholder={"Austin FC, 5124751000, info@austinfc.com, austinfc.com, Austin, TX\nDallas Soccer Club, 2145550100"}
                   value={importText}
                   onChange={(e) => setImportText(e.target.value)}
                 />
@@ -432,61 +508,7 @@ export default function ContactsPage() {
       {/* ── CONTACT BOOK TAB ── */}
       {activeTab === "book" && (
         <div className="space-y-4">
-          {/* Manual add form (same, shown here too) */}
-          {showManual && (
-            <div className="bg-white rounded-xl border border-gray-200 p-5">
-              <h2 className="font-semibold text-gray-800 mb-3">Add Contact Manually</h2>
-              <div className="grid grid-cols-2 gap-3 mb-3">
-                <input
-                  className="border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  placeholder="Club / Company Name *"
-                  value={manualName}
-                  onChange={(e) => setManualName(e.target.value)}
-                />
-                <input
-                  className="border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  placeholder="Phone Number *"
-                  value={manualPhone}
-                  onChange={(e) => setManualPhone(e.target.value)}
-                />
-                <input
-                  className="border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  placeholder="Email (optional)"
-                  value={manualEmail}
-                  onChange={(e) => setManualEmail(e.target.value)}
-                />
-                <div className="flex gap-2">
-                  <input
-                    className="flex-1 border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-                    placeholder="City"
-                    value={manualCity}
-                    onChange={(e) => setManualCity(e.target.value)}
-                  />
-                  <input
-                    className="w-20 border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-                    placeholder="State"
-                    value={manualState}
-                    onChange={(e) => setManualState(e.target.value)}
-                  />
-                </div>
-              </div>
-              <div className="flex gap-2">
-                <button
-                  onClick={handleManualAdd}
-                  disabled={!manualName || !manualPhone}
-                  className="px-4 py-2 bg-blue-600 text-white text-sm rounded-lg hover:bg-blue-700 disabled:opacity-50"
-                >
-                  Save to Contact Book
-                </button>
-                <button
-                  onClick={() => setShowManual(false)}
-                  className="px-4 py-2 border border-gray-200 text-gray-600 text-sm rounded-lg hover:bg-gray-50"
-                >
-                  Cancel
-                </button>
-              </div>
-            </div>
-          )}
+          {manualForm}
 
           {/* Add to campaign picker */}
           {showCampaignPicker && selectedBook.size > 0 && (
@@ -577,8 +599,9 @@ export default function ContactsPage() {
                     <th className="px-4 py-3 font-medium">Club Name</th>
                     <th className="px-4 py-3 font-medium">Phone</th>
                     <th className="px-4 py-3 font-medium">Location</th>
-                    <th className="px-4 py-3 font-medium">Source</th>
                     <th className="px-4 py-3 font-medium">Email</th>
+                    <th className="px-4 py-3 font-medium">Website</th>
+                    <th className="px-4 py-3 font-medium">Source</th>
                     <th className="px-4 py-3 font-medium"></th>
                   </tr>
                 </thead>
@@ -598,12 +621,31 @@ export default function ContactsPage() {
                       <td className="px-4 py-3 text-sm text-gray-500">
                         {c.city}{c.state ? `, ${c.state}` : ""}
                       </td>
+                      <td className="px-4 py-3 text-sm">
+                        {c.email
+                          ? <a href={`mailto:${c.email}`} className="text-blue-500 hover:underline">{c.email}</a>
+                          : <span className="text-gray-300">—</span>}
+                      </td>
+                      <td className="px-4 py-3 text-sm">
+                        {c.website
+                          ? (
+                            <a
+                              href={c.website}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="flex items-center gap-1 text-blue-500 hover:underline"
+                            >
+                              <ExternalLink className="w-3 h-3" />
+                              {(() => { try { return new URL(c.website).hostname.replace(/^www\./, ""); } catch { return c.website; } })()}
+                            </a>
+                          )
+                          : <span className="text-gray-300">—</span>}
+                      </td>
                       <td className="px-4 py-3">
                         <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${sourceColors[c.source] ?? "bg-gray-100 text-gray-600"}`}>
                           {sourceLabel[c.source] ?? c.source}
                         </span>
                       </td>
-                      <td className="px-4 py-3 text-sm text-gray-400">{c.email || "—"}</td>
                       <td className="px-4 py-3">
                         <button
                           onClick={() => handleDeleteContact(c.id)}

@@ -2,7 +2,8 @@
 
 import { useState, useEffect } from "react";
 import Link from "next/link";
-import { Plus, Play, Pause, ChevronRight, RefreshCw } from "lucide-react";
+import { Plus, Play, Pause, ChevronRight, RefreshCw, Trash2 } from "lucide-react";
+import { VOICE_LABEL } from "@/lib/voices";
 
 type Campaign = {
   id: string;
@@ -28,6 +29,7 @@ const statusColors: Record<string, string> = {
 export default function CampaignsPage() {
   const [campaigns, setCampaigns] = useState<Campaign[]>([]);
   const [loading, setLoading] = useState(true);
+  const [confirmDelete, setConfirmDelete] = useState<string | null>(null);
 
   const load = async () => {
     setLoading(true);
@@ -73,6 +75,12 @@ export default function CampaignsPage() {
         body: JSON.stringify({ status: next }),
       });
     } catch { /* optimistic update already applied */ }
+  };
+
+  const deleteCampaign = async (id: string) => {
+    setCampaigns((prev) => prev.filter((c) => c.id !== id));
+    setConfirmDelete(null);
+    await fetch(`/api/campaigns/${id}`, { method: "DELETE" });
   };
 
   const launch = async (id: string) => {
@@ -146,7 +154,7 @@ export default function CampaignsPage() {
                     <div className="flex items-center gap-4 mt-3 text-xs text-gray-400">
                       <span>{c.call_time_start}–{c.call_time_end}</span>
                       <span>Max {c.max_calls_per_day}/day</span>
-                      <span>Voice: {c.voice_id}</span>
+                      <span>Voice: {VOICE_LABEL[c.voice_id] ?? c.voice_id}</span>
                     </div>
                   </div>
 
@@ -177,6 +185,29 @@ export default function CampaignsPage() {
                     >
                       View <ChevronRight className="w-4 h-4" />
                     </Link>
+                    {confirmDelete === c.id ? (
+                      <div className="flex gap-1">
+                        <button
+                          onClick={() => deleteCampaign(c.id)}
+                          className="flex-1 px-2 py-2 text-xs rounded-lg bg-red-600 text-white hover:bg-red-700 font-medium"
+                        >
+                          Confirm
+                        </button>
+                        <button
+                          onClick={() => setConfirmDelete(null)}
+                          className="flex-1 px-2 py-2 text-xs rounded-lg border border-gray-200 text-gray-500 hover:bg-gray-50"
+                        >
+                          Cancel
+                        </button>
+                      </div>
+                    ) : (
+                      <button
+                        onClick={() => setConfirmDelete(c.id)}
+                        className="flex items-center justify-center gap-2 px-3 py-2 text-sm rounded-lg border border-red-100 text-red-400 hover:bg-red-50 hover:text-red-600 font-medium"
+                      >
+                        <Trash2 className="w-4 h-4" />Delete
+                      </button>
+                    )}
                   </div>
                 </div>
               </div>

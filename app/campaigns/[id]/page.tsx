@@ -4,7 +4,8 @@ import { useState, useEffect } from "react";
 import { formatDuration, formatPhone } from "@/lib/utils";
 import { useParams } from "next/navigation";
 import Link from "next/link";
-import { ChevronLeft, Play, Pause, Phone, Clock, Sparkles, FileText, ChevronDown, ChevronUp, RefreshCw, Calendar } from "lucide-react";
+import { ChevronLeft, Play, Pause, Phone, Clock, Sparkles, FileText, ChevronDown, ChevronUp, RefreshCw, Calendar, Mail, PhoneCall } from "lucide-react";
+import { VOICE_LABEL } from "@/lib/voices";
 
 const outcomeColors: Record<string, string> = {
   "demo-booked": "bg-green-100 text-green-700",
@@ -42,6 +43,7 @@ type AnyCall = {
   summary: string | null;
   recording_url?: string | null;
   started_at: string;
+  contact_id?: string;
 };
 
 type Campaign = {
@@ -63,11 +65,14 @@ export default function CampaignDetailPage() {
   const { id } = useParams<{ id: string }>();
   const [campaign, setCampaign] = useState<Campaign | null>(null);
   const [calls, setCalls] = useState<AnyCall[]>([]);
+  const [contactPrefs, setContactPrefs] = useState<Record<string, { method: string; value: string }>>({});
   const [loading, setLoading] = useState(true);
   const [notFound, setNotFound] = useState(false);
   const [expanded, setExpanded] = useState<string | null>(null);
   const [tabs, setTabs] = useState<Record<string, "summary" | "transcript">>({});
   const [markingDemo, setMarkingDemo] = useState<string | null>(null);
+  const [syncing, setSyncing] = useState(false);
+  const [syncResult, setSyncResult] = useState<string | null>(null);
 
   const load = async () => {
     setLoading(true);
@@ -75,8 +80,21 @@ export default function CampaignDetailPage() {
       const res = await fetch(`/api/campaigns/${id}`);
       if (!res.ok) { setNotFound(true); setLoading(false); return; }
       const real = await res.json();
-      const callsRes = await fetch(`/api/calls?campaign_id=${id}`);
+      const [callsRes, contactsRes] = await Promise.all([
+        fetch(`/api/calls?campaign_id=${id}`),
+        fetch("/api/contacts"),
+      ]);
       const liveCalls: AnyCall[] = await callsRes.json();
+      const allContacts: Array<{ id: string; preferred_contact_method?: string; preferred_contact_value?: string }> = await contactsRes.json();
+
+      // Map contact_id → preferred method/value for quick lookup
+      const prefs: Record<string, { method: string; value: string }> = {};
+      for (const c of allContacts) {
+        if (c.preferred_contact_method) {
+          prefs[c.id] = { method: c.preferred_contact_method, value: c.preferred_contact_value ?? "" };
+        }
+      }
+      setContactPrefs(prefs);
       setCalls(liveCalls);
       setCampaign({
         ...real,
@@ -102,6 +120,16 @@ export default function CampaignDetailPage() {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ status: next }),
     });
+  };
+
+  const syncCalls = async () => {
+    setSyncing(true);
+    setSyncResult(null);
+    const res = await fetch("/api/calls/sync", { method: "POST" });
+    const data = await res.json();
+    setSyncResult(`Synced ${data.synced} calls, sent ${data.emailed} follow-up${data.emailed !== 1 ? "s" : ""}.`);
+    setSyncing(false);
+    load();
   };
 
   const markDemoBooked = async (callId: string) => {
@@ -158,6 +186,14 @@ export default function CampaignDetailPage() {
           <button onClick={load} className="p-2 border border-gray-200 rounded-lg text-gray-400 hover:bg-gray-50">
             <RefreshCw className="w-4 h-4" />
           </button>
+          <button
+            onClick={syncCalls}
+            disabled={syncing}
+            className="flex items-center gap-2 px-3 py-2 text-sm border border-blue-200 text-blue-600 rounded-lg hover:bg-blue-50 disabled:opacity-50 font-medium"
+          >
+            <RefreshCw className={`w-4 h-4 ${syncing ? "animate-spin" : ""}`} />
+            {syncing ? "Syncing..." : "Sync Calls"}
+          </button>
           {(campaign.status === "active" || campaign.status === "paused") && (
             <button
               onClick={() => toggleStatus(campaign.status)}
@@ -172,6 +208,12 @@ export default function CampaignDetailPage() {
           )}
         </div>
       </div>
+
+      {syncResult && (
+        <div className="text-sm text-blue-700 bg-blue-50 border border-blue-100 rounded-lg px-4 py-2">
+          {syncResult}
+        </div>
+      )}
 
       {/* Stats */}
       <div className="grid grid-cols-4 gap-4">
@@ -193,7 +235,7 @@ export default function CampaignDetailPage() {
         <h2 className="text-sm font-semibold text-gray-700 mb-3">Call Script</h2>
         <p className="text-sm text-gray-600 whitespace-pre-line leading-relaxed bg-gray-50 rounded-lg p-4">{campaign.script}</p>
         <div className="flex gap-4 mt-3 text-xs text-gray-400">
-          <span>Voice: <span className="text-gray-600 font-medium">{campaign.voice_id}</span></span>
+          <span>Voice: <span className="text-gray-600 font-medium">{VOICE_LABEL[campaign.voice_id] ?? campaign.voice_id}</span></span>
           <span>Hours: <span className="text-gray-600 font-medium">{campaign.call_time_start}–{campaign.call_time_end}</span></span>
           <span>Max/day: <span className="text-gray-600 font-medium">{campaign.max_calls_per_day}</span></span>
         </div>
@@ -228,11 +270,24 @@ export default function CampaignDetailPage() {
                       }`} />
                     </div>
                     <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-2">
+                      <div className="flex items-center gap-2 flex-wrap">
                         <p className="text-sm font-semibold text-gray-900">{call.club_name}</p>
                         <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${outcomeColors[call.outcome] ?? "bg-gray-100 text-gray-600"}`}>
                           {outcomeLabel[call.outcome] ?? call.outcome}
                         </span>
+                        {call.contact_id && contactPrefs[call.contact_id] && (
+                          <span className={`flex items-center gap-1 text-xs px-2 py-0.5 rounded-full font-medium ${
+                            contactPrefs[call.contact_id].method === "email"
+                              ? "bg-blue-50 text-blue-600"
+                              : "bg-purple-50 text-purple-600"
+                          }`}>
+                            {contactPrefs[call.contact_id].method === "email"
+                              ? <Mail className="w-3 h-3" />
+                              : <PhoneCall className="w-3 h-3" />}
+                            Follow up by {contactPrefs[call.contact_id].method}
+                            {contactPrefs[call.contact_id].value ? `: ${contactPrefs[call.contact_id].value}` : ""}
+                          </span>
+                        )}
                       </div>
                       <p className="text-xs text-gray-400 mt-0.5">{formatPhone(call.phone)}</p>
                     </div>

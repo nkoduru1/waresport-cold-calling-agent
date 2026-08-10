@@ -6,18 +6,21 @@ import { formatPhone } from "@/lib/utils";
 import { ChevronLeft, CheckSquare, Square, Mic, Phone } from "lucide-react";
 import Link from "next/link";
 
-const VOICES = [
-  { id: "maya", label: "Maya", desc: "Warm & professional female voice" },
-  { id: "ryan", label: "Ryan", desc: "Friendly male voice" },
-  { id: "grace", label: "Grace", desc: "Calm & clear female voice" },
-  { id: "matt", label: "Matt", desc: "Confident male voice" },
-];
+import { VOICES } from "@/lib/voices";
 
-const DEFAULT_SCRIPT = `Hi, this is an AI assistant calling from Waresport. We help sports clubs manage player registrations, scheduling, and payments — all in one platform.
+const DEFAULT_SCRIPT = `Hi, this is an AI assistant calling from Waresport. We help sports clubs manage player registrations, scheduling, and payments — all in one platform, saving clubs 15 to 20 hours a week on admin work.
 
-I was hoping to connect with whoever manages your club's operations. We've been helping clubs across Texas save 15-20 hours per week on admin work, and I'd love to show you how in a quick 15-minute demo.
+I was hoping to connect with whoever manages your club's operations. I'd love to show you how in a quick 15-minute demo — would that be of interest?
 
-Would you have time for a call this week?`;
+If they say yes: Great! To send you a calendar invite and follow-up reminders, could you share your email address? Please spell it out slowly so I get it right.
+
+Then ask: And would you prefer we follow up with you by email or by phone going forward?
+
+If they prefer email: Perfect — I'll send a demo confirmation, a calendar invite, and reminder emails to that address.
+
+If they prefer phone: No problem — we'll give you a courtesy call the day before, an hour before, and we'll follow up after the demo too.
+
+If they are not interested or do not have time: Thank you for your time! If things change, please visit waresport.com. Have a great day.`;
 
 type Contact = {
   id: string;
@@ -39,7 +42,7 @@ export default function NewCampaignPage() {
   const [name, setName] = useState("");
   const [description, setDescription] = useState("");
   const [script, setScript] = useState(DEFAULT_SCRIPT);
-  const [voice, setVoice] = useState("maya");
+  const [voice, setVoice] = useState("2f9fdbc7-4bf2-4792-8a18-21ce3c93978f");
   const [maxPerDay, setMaxPerDay] = useState("30");
   const [startTime, setStartTime] = useState("09:00");
   const [endTime, setEndTime] = useState("17:00");

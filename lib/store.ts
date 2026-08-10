@@ -35,12 +35,18 @@ export interface StoredContact {
   club_name: string;
   phone: string;
   email?: string | null;
+  website?: string | null;
+  address?: string | null;
   city?: string;
   state?: string;
   source: string;
   verified: boolean;
   created_at: string;
   notes?: string;
+  rating?: number | null;
+  reviews?: number | null;
+  preferred_contact_method?: "phone" | "email" | null;
+  preferred_contact_value?: string | null;
 }
 
 export interface StoredPhoneNumber {
@@ -50,12 +56,18 @@ export interface StoredPhoneNumber {
   created_at: string;
 }
 
+export interface EmailSettings {
+  resend_api_key: string;
+  from_email: string;
+}
+
 interface Store {
   campaigns: StoredCampaign[];
   contacts: StoredContact[];
   calls: StoredCall[];
   call_outcomes: Record<string, string>;
   phone_numbers: StoredPhoneNumber[];
+  email_settings?: EmailSettings;
 }
 
 function read(): Store {
@@ -67,6 +79,7 @@ function read(): Store {
       calls: data.calls ?? [],
       call_outcomes: data.call_outcomes ?? {},
       phone_numbers: data.phone_numbers ?? [],
+      email_settings: data.email_settings ?? undefined,
     };
   } catch {
     return { campaigns: [], contacts: [], calls: [], call_outcomes: {}, phone_numbers: [] };
@@ -90,6 +103,13 @@ export function saveCampaign(campaign: StoredCampaign) {
   const idx = store.campaigns.findIndex((c) => c.id === campaign.id);
   if (idx >= 0) store.campaigns[idx] = campaign;
   else store.campaigns.push(campaign);
+  write(store);
+}
+
+export function deleteCampaign(id: string) {
+  const store = read();
+  store.campaigns = store.campaigns.filter((c) => c.id !== id);
+  store.calls = store.calls.filter((c) => c.campaign_id !== id);
   write(store);
 }
 
@@ -125,6 +145,14 @@ export function getCalls(campaignId?: string) {
   const store = read();
   if (campaignId) return store.calls.filter((c) => c.campaign_id === campaignId);
   return store.calls;
+}
+
+export function getCallById(id: string): StoredCall | null {
+  return read().calls.find((c) => c.id === id) ?? null;
+}
+
+export function getCallByBlandId(blandCallId: string): StoredCall | null {
+  return read().calls.find((c) => c.bland_call_id === blandCallId) ?? null;
 }
 
 export function getCallOutcomes(): Record<string, string> {
@@ -174,5 +202,15 @@ export function savePhoneNumber(pn: StoredPhoneNumber) {
 export function deletePhoneNumber(id: string) {
   const store = read();
   store.phone_numbers = store.phone_numbers.filter((p) => p.id !== id);
+  write(store);
+}
+
+export function getEmailSettings(): EmailSettings | null {
+  return read().email_settings ?? null;
+}
+
+export function saveEmailSettings(settings: EmailSettings) {
+  const store = read();
+  store.email_settings = settings;
   write(store);
 }
